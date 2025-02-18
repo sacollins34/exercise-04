@@ -7,6 +7,231 @@ editor: visual
 
 # **Wordle Puzzle Challenge**
 
-```{r}
+## **Directions of the Game:**
 
+-   A player has **SIX** tries to guess a **5-letter** word. This word has has been selected at random from a list of possible words found within a dictionary.
+
+-   Any guess needs to be a valid **5-letter** word found within a dictionary.
+
+-   After each guess, the player will receive feedback on how close their guess was to the word. The feedback given will show whether the letters within your guess are:
+
+    -   In the word and in the correct position: (\*)
+
+    -   In the word but in the wrong position: (+)
+
+    -   Not in the word: (-)
+
+## Preliminaries:
+
+I am loading in the tidyverse package and also assigning the two documents we are going to be using for the Wordle challenge.
+
+-   f1 \<- Official scrabble words from the **Collins English Dictionary** by Harper Collins.
+
+-   f2 \<- The most common words in the English language.
+
+```{r}
+#| warning: FALSE
+
+library(tidyverse)
+f1 <- "collins-scrabble-words-2019.txt"
+f2 <- "google-10000-english-usa-no-swears.txt"
+```
+
+## Step 1:
+
+I first created a custom function that is called **load_dictionary().** This function allows me to read/load the two data files I will be using in the challenge. This function originally loads in both of these files as tibble and not a vector (found out the hard way that this is important for later). I also created my ***vaild_list*** and ***solution_list*** variables.
+
+```{r}
+#| warning: FALSE
+
+load_dictionary <- function(filename) {#filename is the arguement/input
+  x <- read_tsv(filename, col_names = TRUE) # using tsv since were working with .txt
+  return(x)
+}
+
+valid_list <- load_dictionary(f1) # 279,496 objects/rows in this file
+solution_list <- load_dictionary(f2) # 9,884 object/rows in this file
+```
+
+## Step 2
+
+I winnowed (remove unwanted or irrelevant data) my variable ***solution_list*** to only include words that are included in ***valid_list*****.** I wasn't sure how the *intersect()* function was working at first. I guess it is finding the common values between two vectors or columns and removing the rest. The number of words dropped down to 8,336 from the original 9,984.
+
+```{r}
+#| warning: FALSE
+ 
+solution_list <- intersect(solution_list, valid_list) # the order of the variables doen't seem to matter here. 
+```
+
+## Step 3
+
+I created a new function called **pick_solution()** that is supposed to do three main things.
+
+1.  The first thing is removing all the words from ***solution_list*** that are not **5-letters** in length.
+
+    -   I first created a new column within my data table that contained the number of letters in each word.
+
+    -   I then filtered out only words that were **5-letters** long.
+
+2.  The second was randomly sampling a single word from those that remained.
+
+3.  The third was to split the randomly sampled word into a vector of single-character elements.
+
+    -   I first had to use the **pull()** function to turn the word into a vector first before I could split the word into single-character elements.
+
+4.  This is extra but I then assigned the **pick_solution(**solution_list**)** to the variable ***solution***.
+
+There must be an easier way of doing this. I did try turning the ***solution_list*** and ***valid_list*** into vectors like the examples given in Step 1 but then I couldn't figure out how to filter only the **5-letter** words but this worked. On the bright side I have a way better understanding of pipe operator and creating these simple functions. I also decided to keep it to the original **5-letter** wordle.
+
+```{r}
+#| warning: FALSE
+
+pick_solution <- function(any_word_list) {
+  x <- any_word_list |>
+    mutate(word_number = nchar(words)) |>  # new column with letter counts
+    filter(word_number == 5) |> # filtered only words with 5 letters
+    sample_n(1, replace = TRUE) |> # random sampling a single word/row
+    pull(words)|> # turning the sampled word into a vector 
+    str_split_1(pattern ="") # then into a vector of single-character elements.
+  
+return(x)
+}
+
+solution <- pick_solution(solution_list)
+```
+
+## Step 4.a: **play_wordle() function**
+
+I created a new function called **play_wordle()** that takes three arguments:
+
+1.  solution: the answer to the puzzle (the value of your solution variable)
+
+2.  valid_list: the list of valid guesses (the contents of your valid_list variable),
+
+3.  num_guesses: a value for “number of guesses”, which you should set to the original Wordle game default of 6.
+
+The **play_wordle()** function is the main chunk of this game and it's supposed to do alot of things. I had trouble figuring out where to even start so I took the approach of first creating what I wanted it to output and then working backwards. The outputs below:
+
+1.  Rules of the game:
+
+2.  Letters left:
+
+3.  Must have 5 characters:
+
+4.  Not in my dictionary:
+
+5.  Win/Lose:
+
+```{r}
+play_wordle <- function(solution, valid_list, num_guesses = 6) {
+  print(paste("Rules of the game: You have", num_guesses, "chances to guess a word that is 5 letters long!"), collapse = " ")
+  valid_list <- pull(valid_list) # turns my valid_list into a vector
+  letters_left <- LETTERS # built-in alphabet vector 
+
+# I am using the for() loop function since it can loop a piece of code over set number times. In ourcase it is (1:num_guesses) which is just (1:6). 
+for (i in 1:num_guesses) {
+  print(paste(c("Letters Left: ",letters_left), collapse = " "))
+  guess <- readline(paste(c("Enter a guess, then press <enter>: ")))
+  guess <- toupper(guess) # turns the input into an upper case! 
+ 
+# I tried using if conditional statements but I could not get this work. I then tried using while() loops and it worked. It also made sense to me since I needed it to run an infinite number of times. 
+while (nchar(guess) != 5) {
+    guess <- readline("Sorry, guess must have 5 characters, guess again: ")
+    guess <- toupper(guess) # turns the input into an upper case!
+}
+  
+while (!(guess %in% valid_list)) {
+  guess <- readline("Sorry, this word is not in my dictionary, guess again: ")
+  guess <- toupper(guess) # turns the input into an upper case!
+}
+
+# I had trouble figuring out where evereything below needed to go but it kept working when I would put it within the for() loop. Which makes sense since it needed to do all of this between each attempt (i in 1:num_guesses). 
+  
+# The setdiff() fucntion let me delete any of the letter that were just used in a guess. The order of varaibles matters for this function. I needed to turn the guess into a vector of single-character elements first. 
+  guess_vector <- str_split_1(guess, pattern = "")
+  letters_left <- setdiff(letters_left, guess_vector)
+
+# Feed_back for which letters were in the right place, within the word, or not present
+  feed_back <- evaluate_guess(guess,solution)
+  print(noquote(paste(feed_back))) 
+
+# I assumed we probably needed to display the the guess a player typed so that they can compare it to the feed_back. 
+# noquote() gets rid of the ""
+#guess_vector lines up better with the feed_back print out. 
+  print(noquote(paste(guess_vector))) 
+  
+# I attempted to use the if and else if conditional statements for this part and I was able to get a win and lose statement. Not the guess and feedback history though. 
+# I found the cat() fucntion can be used instead of print and it allows you to create new lines. 
+  if (all(guess_vector == solution)) {
+    return(cat("\nYou actually WON!!!\nHIP HIP HOORAY!!!"))
+  }
+  else if (i == 6) {
+    return(cat("\nYOU LOSE!!!!\nSUCKS TO SUCK!!!\nMAYBE NEXT TIME!!!\nThe Answer was:",solution))
+  }
+  }
+} 
+```
+
+## Step 4.b: evaluate_guess() function
+
+I could not figure out how to get this **evaluate_guess()** function to work for the life of me. I also spent so much time trying to get the **play_wordle()** fucntion to work. I tried using the (if and else if) and then the **casewhen()** but I couldn't get it to work. I finally had to reference the "fun blog post." I understand for the most part what happening but I'm confused what's going in the second **for()** loop.
+
+```{r}
+#| warning: FALSE
+
+evaluate_guess <- function(guess, solution) {
+  guess_vector <- str_split_1(guess, pattern = "")
+  feed_back <- rep("-", length(solution))
+  
+  for (i in 1:length(solution)) {
+    if (guess_vector [i] == solution[i]) {
+      feed_back[i] <- "*"
+      solution[i] <- "-"
+    }
+  }
+  for (i in 1:length(solution)) {
+    if (feed_back[i] != "*") {
+      idx <- match(guess_vector[i], solution)
+      if (!is.na(idx)) {
+        feed_back[i] <- "+"
+        solution[idx] <- "-"
+      }
+    }
+  }
+  return(feed_back)
+}
+```
+
+## My evaluate_guess() function
+
+This is the evaluate_guess() function I tried creating but I could not get it work properly.
+
+```{r}
+#| eval: false
+#| warning: false
+evaluate_guess <- function(guess, solution) {
+  guess_vector <- str_split_1(guess, pattern = "")
+  feed_back <- rep("-", length(solution))
+ 
+   for (i in 1:length(solution)) {
+    if (guess_vector[i] == solution[i]) {
+      feed_back[i] <- "*"
+    }
+    if (guess_vector[i] %in% solution[i] & guess_vector[i] != solution[i]){
+      feed_back[i] <- "+"
+    }
+    if (!(guess_vector[i] %in% solution[i])) {
+      feed_back[i] <- "-"
+    }
+  }
+  return(feed_back)
+}
+```
+
+In order to play the game you have to enter the following code: play_wordle(solution,valid_list). If I included the function in the chunk of code below then it wouldn't let me render the quarto document. I tried using the #\| include: FALSE but it still would not render it.
+
+```{r}
+#| include: FALSE
+
+# play_wordle(solution,valid_list)
 ```
